@@ -1,6 +1,8 @@
 // Firebase web config (replace with your own if needed)
+import { API_KEY } from './config.js';
+
 const firebaseConfig = {
-  apiKey: "AIzaSyC3al4PZFlkFtSPLVTyFgRG1zM_tye2A_M",
+  apiKey: API_KEY,
   authDomain: "logindb-c1c82.firebaseapp.com",
   databaseURL: "https://logindb-c1c82-default-rtdb.firebaseio.com",
   projectId: "logindb-c1c82",
@@ -142,7 +144,6 @@ async function fetchPage(direction='next'){
   return {docs: filtered, first:firstDoc, last:lastDoc};
 }
 
-// Render
 function statusBadge(status){
   const map = {
     active: 'badge active',
