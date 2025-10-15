@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:traintrack_lost_found/secrets.dart';
+import 'package:traintrack_lost_found/suggestion/autocompleteField.dart'; // Import your autocomplete widget
 
 class PostItemPage extends StatefulWidget {
   const PostItemPage({super.key});
@@ -133,6 +135,35 @@ class _PostItemPageState extends State<PostItemPage> {
     setState(() => _loading = false);
   }
 
+  String? _validateTitle(String? v) {
+    final s = v?.trim() ?? '';
+    if (s.isEmpty) return 'Title is required';
+    if (s.length < 3) return 'Title must have at least 3 characters';
+    if (s.length > 45) return 'Max 45 characters';
+    if (!RegExp(r'[a-zA-Z]').hasMatch(s)) return 'Must include at least one letter';
+    if (RegExp(r'^\d+$').hasMatch(s)) return 'Cannot be only numbers';
+    if (RegExp(r'^[^a-zA-Z0-9]+$').hasMatch(s)) return 'Cannot be only symbols';
+    if (s != s.replaceAll(RegExp(r'\s{2,}'), ' ')) return 'No consecutive spaces allowed';
+    return null;
+  }
+
+  String? _validateDesc(String? v) {
+    final s = v?.trim() ?? '';
+    if (s.isEmpty) return 'Description is required';
+    if (s.length < 10) return 'Minimum 10 characters';
+    if (s.length > 500) return 'Maximum 500 characters';
+    if (!RegExp(r'[a-zA-Z]').hasMatch(s)) return 'Add details (not only numbers/symbols)';
+    if (RegExp(r'^\d+$').hasMatch(s)) return 'Cannot be only numbers';
+    if (RegExp(r'^[^a-zA-Z0-9]+$').hasMatch(s)) return 'Cannot be only symbols';
+    if (s != s.replaceAll(RegExp(r'\s{2,}'), ' ')) return 'No consecutive spaces allowed';
+    return null;
+  }
+
+  String? _validateCategory(String? v) {
+    if (v == null || v.isEmpty) return "Please select a category";
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
@@ -165,16 +196,16 @@ class _PostItemPageState extends State<PostItemPage> {
                       const SizedBox(height: 18),
                       TextFormField(
                         decoration: const InputDecoration(labelText: "Title", prefixIcon: Icon(Icons.title)),
-                        maxLength: 40,
-                        validator: (v) => v == null || v.trim().isEmpty ? "Title is required" : null,
+                        maxLength: 45,
+                        validator: _validateTitle,
                         onChanged: (v) => _title = v,
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
                         decoration: const InputDecoration(labelText: "Description", prefixIcon: Icon(Icons.description)),
-                        maxLines: 2,
-                        maxLength: 120,
-                        validator: (v) => v == null || v.trim().isEmpty ? "Description is required" : null,
+                        maxLines: 3,
+                        maxLength: 500,
+                        validator: _validateDesc,
                         onChanged: (v) => _desc = v,
                       ),
                       const SizedBox(height: 10),
@@ -183,14 +214,17 @@ class _PostItemPageState extends State<PostItemPage> {
                         items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                         decoration: const InputDecoration(labelText: "Category", prefixIcon: Icon(Icons.category)),
                         onChanged: (v) => setState(() => _category = v ?? ""),
-                        validator: (v) => (v == null || v.isEmpty) ? "Please select a category" : null,
+                        validator: _validateCategory,
                       ),
                       const SizedBox(height: 10),
-                      TextFormField(
-                        decoration: const InputDecoration(labelText: "Station or Train Number", prefixIcon: Icon(Icons.train)),
-                        validator: (v) => v == null || v.trim().isEmpty ? "Station or Train Number is required" : null,
-                        onChanged: (v) => _stationOrTrain = v,
+                      
+                      // Use your combined autocomplete field here:
+                      StationTrainAutocompleteField(
+                        apiKey: railRadarKey,
+                        initialValue: _stationOrTrain,
+                        onChanged: (value) => _stationOrTrain = value,
                       ),
+                      
                       const SizedBox(height: 16),
                       Row(
                         children: [
@@ -233,12 +267,13 @@ class _PostItemPageState extends State<PostItemPage> {
                                   width: double.infinity,
                                   alignment: Alignment.center,
                                   child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.image, size: 36, color: Colors.blueGrey[300]),
-                                        const SizedBox(height: 4),
-                                        const Text("Tap to upload photo (required)"),
-                                      ]),
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.image, size: 36, color: Colors.blueGrey[300]),
+                                      const SizedBox(height: 4),
+                                      const Text("Tap to upload photo (required)"),
+                                    ],
+                                  ),
                                 ),
                               )
                             : ClipRRect(

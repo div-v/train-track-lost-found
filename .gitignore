@@ -78,3 +78,5 @@ android/app/google-services.json
 # -----------------------
 app.*.symbols
 app.*.map.json
+
+lib/secrets.dart

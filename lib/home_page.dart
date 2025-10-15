@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'tabs/lost_items_page.dart';
 import 'tabs/found_items_page.dart';
-import 'tabs/my_posts_page.dart';
 import 'tabs/post_item_page.dart';
-import 'package:logindb/chats/chat_page.dart';
+import 'chats/chat_page.dart';
+import 'tabs/profile_page.dart'; // NEW
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -53,11 +53,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               );
             },
           ),
-          IconButton(
-            icon: Icon(Icons.exit_to_app, color: Colors.red[600]),
-            tooltip: "Log Out",
-            onPressed: () => FirebaseAuth.instance.signOut(),
-          ),
+          // Removed top-right logout button; logout will live in Profile tab
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -75,13 +71,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               height: 48,
             ),
             Tab(
-              icon: Icon(Icons.person, color: Colors.blueGrey),
-              text: "My Posts",
+              icon: Icon(Icons.add_circle, color: Colors.indigo),
+              text: "Post New",
               height: 48,
             ),
             Tab(
-              icon: Icon(Icons.add_circle, color: Colors.indigo),
-              text: "Post New",
+              icon: Icon(Icons.person, color: Colors.blueGrey),
+              text: "Profile",
               height: 48,
             ),
           ],
@@ -92,8 +88,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         children: const [
           LostItemsPage(),
           FoundItemsPage(),
-          MyPostsPage(),
           PostItemPage(),
+          ProfilePage(), // last tab now
         ],
       ),
     );

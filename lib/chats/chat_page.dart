@@ -32,36 +32,35 @@ class ChatsPage extends StatelessWidget {
           if (snap.hasError) {
             return Center(child: Text('Error: ${snap.error}'));
           }
-          // Client-side filter: exclude chats hidden for me
+
           final all = snap.data?.docs ?? [];
+
+          // Exclude conversations hidden for me
           final docs = all.where((d) {
             final data = d.data();
             final del = (data['deletedFor'] is Map)
                 ? Map<String, dynamic>.from(data['deletedFor'])
                 : const <String, dynamic>{};
-            return del[uid] == null;
+            return del[uid] != true;
           }).toList();
 
           if (docs.isEmpty) {
             return const Center(child: Text('No conversations yet'));
           }
+
           return ListView.builder(
             itemCount: docs.length,
             itemBuilder: (_, i) {
               final d = docs[i];
               final data = d.data();
+
+              // Participants
               final parts = (data['participants'] is List)
                   ? List<String>.from(data['participants'] as List)
                   : <String>[];
               final otherUid = parts.firstWhere((p) => p != uid, orElse: () => '');
-              final lastText = (data['lastMessageText'] ?? '').toString();
-              final ts = data['lastMessageAt'];
-              String time = '';
-              if (ts is Timestamp) {
-                final dt = ts.toDate();
-                time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-              }
 
+              // Friendly name
               final friendly = (data['participantMeta'] is Map &&
                       (data['participantMeta'][otherUid]?['name'] ?? '') != '')
                   ? data['participantMeta'][otherUid]['name'].toString()
@@ -78,6 +77,37 @@ class ChatsPage extends StatelessWidget {
                 );
               }
 
+              // Read per-user last text/time by flattened field path
+              final myKey = 'lastMessageTextBy.$uid';
+              final myAtKey = 'lastMessageAtBy.$uid';
+
+              final rawText = data[myKey];
+              final rawAt = data[myAtKey];
+
+              final hasPerUser = rawText != null;
+              String lastTextForMe = (rawText is String) ? rawText : '';
+              Timestamp? lastAtForMe = (rawAt is Timestamp) ? rawAt : null;
+
+              // Fallback only if no per-user entry exists
+              if (!hasPerUser) {
+                final del = (data['deletedFor'] is Map)
+                    ? Map<String, dynamic>.from(data['deletedFor'])
+                    : const <String, dynamic>{};
+                final globalLast = (data['lastMessageText'] ?? '').toString();
+                lastTextForMe = del[uid] == true ? '' : globalLast;
+                lastAtForMe ??= data['lastMessageAt'] as Timestamp?;
+              }
+
+              final subtitle = hasPerUser
+                  ? (lastTextForMe.isNotEmpty ? lastTextForMe : 'Photo')
+                  : (lastTextForMe.isNotEmpty ? lastTextForMe : 'Photo');
+
+              String time = '';
+              if (lastAtForMe is Timestamp) {
+                final dt = lastAtForMe.toDate();
+                time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+              }
+
               return ListTile(
                 leading: CircleAvatar(child: Text(initial)),
                 title: Text(
@@ -86,7 +116,7 @@ class ChatsPage extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  lastText.isNotEmpty ? lastText : 'Photo',
+                  subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

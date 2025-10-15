@@ -17,7 +17,6 @@ class ChatRepo {
     final me = uid;
     if (me.isEmpty) throw Exception('Not signed in');
 
-    // Try to find existing conversation for this item and pair
     final qs = await _db
         .collection('conversations')
         .where('participants', arrayContains: me)
@@ -33,11 +32,9 @@ class ChatRepo {
       }
     }
 
-    // Friendly names
     final myEmail = _auth.currentUser?.email ?? '';
     final myName = _nameFromEmail(myEmail);
 
-    // Prefer RTDB profile for poster
     String posterName = 'User';
     try {
       final rtdbSnap = await FirebaseDatabase.instance.ref('users/$posterUid').get();
@@ -86,7 +83,6 @@ class ChatRepo {
     return doc.id;
   }
 
-  // Backfill names for older threads (uses RTDB, falls back to itemId)
   Future<void> _ensureParticipantNames(
     DocumentReference convRef,
     String me,
@@ -129,25 +125,21 @@ class ChatRepo {
           otherUid: {'name': otherName},
         }
       }, SetOptions(merge: true));
-    } catch (_) {
-      // best-effort backfill
-    }
+    } catch (_) {}
   }
 
-  // Public helper for UI-triggered backfill
   Future<void> ensureParticipantNames({
     required String conversationId,
     required String myUid,
     required String otherUid,
     String? itemId,
-  }) {
-    return _ensureParticipantNames(
-      _db.collection('conversations').doc(conversationId),
-      myUid,
-      otherUid,
-      itemId: itemId,
-    );
-  }
+  }) =>
+      _ensureParticipantNames(
+        _db.collection('conversations').doc(conversationId),
+        myUid,
+        otherUid,
+        itemId: itemId,
+      );
 
   Stream<QuerySnapshot<Map<String, dynamic>>> conversationList() {
     final me = uid;
@@ -168,18 +160,105 @@ class ChatRepo {
         .snapshots();
   }
 
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> filterVisibleForMe(
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) {
+    final me = uid;
+    return snap.docs.where((d) {
+      final data = d.data();
+      final df = (data['deletedFor'] as Map?)?.cast<String, dynamic>();
+      final hidden = df != null && df[me] == true;
+      return !hidden;
+    }).toList();
+  }
+
   Stream<DocumentSnapshot<Map<String, dynamic>>> conversation(String cid) {
     return _db.collection('conversations').doc(cid).snapshots();
   }
+
+  // ------------- Per-user "last visible" helpers -------------
+
+  Future<List<String>> _getParticipants(String cid) async {
+    final conv = await _db.collection('conversations').doc(cid).get();
+    return List<String>.from((conv.data()?['participants'] ?? const []) as List);
+  }
+
+  Future<void> _setLastBy(
+    String cid, {
+    required Map<String, String> textBy,
+    required Map<String, Timestamp?> atBy,
+    String? globalText,
+    Timestamp? globalAt,
+  }) async {
+    final convRef = _db.collection('conversations').doc(cid);
+    final updates = <String, dynamic>{};
+    textBy.forEach((k, v) => updates['lastMessageTextBy.$k'] = v);
+    atBy.forEach((k, v) => updates['lastMessageAtBy.$k'] = v);
+    if (globalText != null) updates['lastMessageText'] = globalText;
+    if (globalAt != null) updates['lastMessageAt'] = globalAt;
+    await convRef.set(updates, SetOptions(merge: true));
+  }
+
+  Future<Map<String, dynamic>?> _findLatestVisibleFor(String cid, String viewerUid) async {
+    final convRef = _db.collection('conversations').doc(cid);
+    final qs = await convRef
+        .collection('messages')
+        .orderBy('createdAt', descending: true)
+        .limit(25)
+        .get();
+    for (final d in qs.docs) {
+      final m = d.data();
+      final df = (m['deletedFor'] is Map) ? Map<String, dynamic>.from(m['deletedFor']) : const <String, dynamic>{};
+      final deletedForEveryone = (m['deletedForEveryone'] ?? false) == true;
+      if (df[viewerUid] == true) continue;
+      final text = deletedForEveryone ? (m['tombstoneText'] ?? 'Message deleted') : (m['text'] ?? '');
+      return {'text': text as String, 'createdAt': m['createdAt'] as Timestamp?};
+    }
+    return null;
+  }
+
+  Future<void> _updateLastForUsersAfterSend({
+    required String cid,
+    required String textOrPhoto,
+    required Timestamp? createdAt,
+    required List<String> participants,
+  }) async {
+    final byText = <String, String>{ for (final p in participants) p: textOrPhoto };
+    final byAt = <String, Timestamp?>{ for (final p in participants) p: createdAt };
+    await _setLastBy(cid, textBy: byText, atBy: byAt, globalText: textOrPhoto, globalAt: createdAt);
+  }
+
+  Future<void> _updateLastForEveryoneDelete({
+    required String cid,
+    required String tombstoneText,
+    required Timestamp? at,
+    required List<String> participants,
+  }) async {
+    final byText = <String, String>{ for (final p in participants) p: tombstoneText };
+    final byAt = <String, Timestamp?>{ for (final p in participants) p: at };
+    await _setLastBy(cid, textBy: byText, atBy: byAt, globalText: tombstoneText, globalAt: at);
+  }
+
+  Future<void> _updateLastForMeAfterDelete({
+    required String cid,
+    required String me,
+  }) async {
+    final latest = await _findLatestVisibleFor(cid, me);
+    final text = (latest?['text'] as String?) ?? '';
+    final at = latest?['createdAt'] as Timestamp?;
+    await _setLastBy(cid, textBy: {me: text}, atBy: {me: at});
+  }
+
+  // ---------------- Message actions ----------------
 
   Future<void> sendText(String cid, String text) async {
     final me = uid;
     final t = text.trim();
     if (t.isEmpty || me.isEmpty) return;
 
-    final ref = _db.collection('conversations').doc(cid);
+    final convRef = _db.collection('conversations').doc(cid);
+    final msgRef = convRef.collection('messages').doc();
     final batch = _db.batch();
-    final msgRef = ref.collection('messages').doc();
 
     batch.set(msgRef, {
       'senderUid': me,
@@ -188,21 +267,31 @@ class ChatRepo {
       'seenBy': {me: true},
     });
 
-    batch.update(ref, {
+    batch.update(convRef, {
       'lastMessageText': t,
       'lastMessageAt': FieldValue.serverTimestamp(),
     });
 
     await batch.commit();
+
+    final parts = await _getParticipants(cid);
+    final createdAtSnap = await msgRef.get();
+    final ts = createdAtSnap.data()?['createdAt'] as Timestamp?;
+    await _updateLastForUsersAfterSend(
+      cid: cid,
+      textOrPhoto: t,
+      createdAt: ts,
+      participants: parts,
+    );
   }
 
   Future<void> sendImage(String cid, String imageUrl) async {
     final me = uid;
     if (imageUrl.isEmpty || me.isEmpty) return;
 
-    final ref = _db.collection('conversations').doc(cid);
+    final convRef = _db.collection('conversations').doc(cid);
+    final msgRef = convRef.collection('messages').doc();
     final batch = _db.batch();
-    final msgRef = ref.collection('messages').doc();
 
     batch.set(msgRef, {
       'senderUid': me,
@@ -211,12 +300,21 @@ class ChatRepo {
       'seenBy': {me: true},
     });
 
-    batch.update(ref, {
+    batch.update(convRef, {
       'lastMessageText': '[Photo]',
       'lastMessageAt': FieldValue.serverTimestamp(),
     });
 
     await batch.commit();
+
+    final parts = await _getParticipants(cid);
+    final ts = (await msgRef.get()).data()?['createdAt'] as Timestamp?;
+    await _updateLastForUsersAfterSend(
+      cid: cid,
+      textOrPhoto: '[Photo]',
+      createdAt: ts,
+      participants: parts,
+    );
   }
 
   Future<void> markSeen(
@@ -243,9 +341,6 @@ class ChatRepo {
     await convRef.set({'typing': {me: isTyping}}, SetOptions(merge: true));
   }
 
-  // ===== Delete / Hide APIs =====
-
-  // Hide chat for current user
   Future<void> hideChatForMe(String cid) async {
     final me = uid;
     if (me.isEmpty) return;
@@ -254,18 +349,38 @@ class ChatRepo {
     });
   }
 
-  // Delete a single message for current user
   Future<void> deleteMessageForMe(String cid, String mid) async {
     final me = uid;
     if (me.isEmpty) return;
-    await _db.collection('conversations').doc(cid)
-        .collection('messages').doc(mid).update({
-      'deletedFor.$me': true,
-      'deletedAt': FieldValue.serverTimestamp(),
+
+    final convSnap = await _db.collection('conversations').doc(cid).get();
+    final parts = List<String>.from((convSnap.data()?['participants'] ?? const []) as List);
+    if (!parts.contains(me)) {
+      throw Exception('Not a participant for this conversation');
+    }
+
+    final ref = _db.collection('conversations').doc(cid).collection('messages').doc(mid);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (!snap.exists) return;
+
+      final data = snap.data() as Map<String, dynamic>? ?? {};
+      final existing = (data['deletedFor'] is Map)
+          ? Map<String, dynamic>.from(data['deletedFor'])
+          : const <String, dynamic>{};
+
+      if (existing[me] == true) return;
+
+      tx.update(ref, {
+        'deletedFor.$me': true,
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
     });
+
+    await _updateLastForMeAfterDelete(cid: cid, me: me);
   }
 
-  // Delete a single message for everyone (sender/admin)
   Future<void> deleteMessageForEveryone({
     required String cid,
     required String mid,
@@ -274,12 +389,26 @@ class ChatRepo {
     if (uid != senderUid) {
       throw Exception('Only sender can delete for everyone');
     }
-    await _db.collection('conversations').doc(cid)
-        .collection('messages').doc(mid).update({
+    final msgRef = _db
+        .collection('conversations')
+        .doc(cid)
+        .collection('messages')
+        .doc(mid);
+
+    await msgRef.update({
       'deletedForEveryone': true,
       'hasTombstone': true,
       'tombstoneText': 'Message deleted',
       'deletedAt': FieldValue.serverTimestamp(),
     });
+
+    final parts = await _getParticipants(cid);
+    final ts = (await msgRef.get()).data()?['createdAt'] as Timestamp?;
+    await _updateLastForEveryoneDelete(
+      cid: cid,
+      tombstoneText: 'Message deleted',
+      at: ts,
+      participants: parts,
+    );
   }
 }

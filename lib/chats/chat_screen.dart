@@ -38,7 +38,6 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
 
-    // Guard invalid navigation arguments early
     if (widget.posterId.isEmpty || (widget.itemId == null && widget.conversationId == null)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,7 +114,41 @@ class _ChatScreenState extends State<ChatScreen> {
     await _repo.sendImage(_cid!, httpsUrl);
   }
 
-  // NOTE: Removed dynamic UID-based title; we keep the friendly name passed from the list.
+  Future<String?> _confirmDelete(BuildContext context, {required bool fromMe}) async {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Delete message?'),
+          content: const Text('Choose how to delete this message.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('delete_me'),
+              child: const Text('Delete for me'),
+            ),
+            if (fromMe)
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('delete_all'),
+                child: const Text('Delete for everyone'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +166,6 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Always show the friendly name provided (email prefix), never a UID
                   Text(safeName, overflow: TextOverflow.ellipsis),
                   if (cid != null)
                     StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -167,27 +199,29 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
                       final msgs = snap.data!.docs;
 
+                      // Filter out messages deleted for current user
+                      final visibleMsgs = msgs.where((doc) {
+                        final data = doc.data();
+                        final deletedFor = (data['deletedFor'] is Map)
+                            ? Map<String, dynamic>.from(data['deletedFor'])
+                            : <String, dynamic>{};
+                        return deletedFor[_repo.uid] != true;
+                      }).toList();
+
                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _repo.markSeen(cid, msgs);
+                        _repo.markSeen(cid, visibleMsgs);
                       });
 
-                      if (msgs.isEmpty) return const Center(child: Text('Say hi 👋'));
+                      if (visibleMsgs.isEmpty) return const Center(child: Text('Say hi 👋'));
 
                       return ListView.builder(
                         controller: _scrollCtrl,
                         reverse: true,
-                        itemCount: msgs.length,
+                        itemCount: visibleMsgs.length,
                         itemBuilder: (_, i) {
-                          final doc = msgs[i];
+                          final doc = visibleMsgs[i];
                           final m = doc.data();
                           final fromMe = (m['senderUid'] ?? '') == _repo.uid;
-
-                          // NEW: deletion flags handling
-                          final deletedFor = (m['deletedFor'] is Map)
-                              ? Map<String, dynamic>.from(m['deletedFor'])
-                              : const <String, dynamic>{};
-                          final deletedForMe = deletedFor[_repo.uid] == true;
-                          if (deletedForMe) return const SizedBox.shrink();
 
                           final deletedForEveryone = (m['deletedForEveryone'] ?? false) == true;
                           final tombText = (m['tombstoneText'] ?? 'Message deleted') as String;
@@ -209,47 +243,27 @@ class _ChatScreenState extends State<ChatScreen> {
 
                           Widget? mediaWidget;
                           if (hasImage) {
-                            if (imageUrl.startsWith('file://')) {
-                              mediaWidget = Image.file(
-                                File(imageUrl.replaceFirst('file://', '')),
-                                width: 220,
-                                height: 220,
-                                fit: BoxFit.cover,
-                              );
-                            } else {
-                              mediaWidget = Image.network(
-                                imageUrl,
-                                width: 220,
-                                height: 220,
-                                fit: BoxFit.cover,
-                              );
-                            }
+                            mediaWidget = imageUrl.startsWith('file://')
+                                ? Image.file(File(imageUrl.replaceFirst('file://', '')),
+                                    width: 220, height: 220, fit: BoxFit.cover)
+                                : Image.network(imageUrl, width: 220, height: 220, fit: BoxFit.cover);
                           }
 
                           return Align(
                             alignment: fromMe ? Alignment.centerRight : Alignment.centerLeft,
                             child: GestureDetector(
-                              // NEW: long-press delete menu
                               onLongPress: () async {
-                                final choice = await showMenu<String>(
-                                  context: context,
-                                  position: RelativeRect.fromLTRB(100, 100, 100, 100),
-                                  items: [
-                                    const PopupMenuItem(
-                                        value: 'delete_me', child: Text('Delete for me')),
-                                    if (fromMe)
-                                      const PopupMenuItem(
-                                          value: 'delete_all', child: Text('Delete for everyone')),
-                                  ],
-                                );
+                                final choice = await _confirmDelete(context, fromMe: fromMe);
                                 if (choice == 'delete_me') {
                                   await _repo.deleteMessageForMe(cid, doc.id);
+                                  _toast('Message deleted for you');
                                 } else if (choice == 'delete_all' && fromMe) {
                                   await _repo.deleteMessageForEveryone(
                                     cid: cid,
                                     mid: doc.id,
                                     senderUid: _repo.uid,
                                   );
+                                  _toast('Message deleted for everyone');
                                 }
                               },
                               child: Container(

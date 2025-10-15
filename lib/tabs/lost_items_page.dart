@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:logindb/chats/chat_screen.dart';
+import 'package:traintrack_lost_found/chats/chat_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class LostItemsPage extends StatefulWidget {
