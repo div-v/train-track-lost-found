@@ -16,7 +16,7 @@
 
     <application
         android:name="${applicationName}"
-        android:label="logindb"
+        android:label="TrainTrack Lost and Found"
         android:icon="@mipmap/ic_launcher">
 
         <!-- Main entry point -->

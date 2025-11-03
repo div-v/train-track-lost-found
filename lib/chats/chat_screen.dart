@@ -154,7 +154,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final cid = _cid;
     final safeName = widget.posterName.isNotEmpty ? widget.posterName : 'User';
-    final initial = safeName;
+    final initial = safeName.isNotEmpty ? safeName[0].toUpperCase() : '?';
 
     return Scaffold(
       appBar: AppBar(

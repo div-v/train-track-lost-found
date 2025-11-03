@@ -82,7 +82,6 @@ class _AuthPageState extends State<AuthPage> {
   String error = '';
   bool loading = false;
 
-  // Save FCM token to Realtime Database
   Future<void> saveFcmToken(String uid) async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
@@ -105,24 +104,17 @@ class _AuthPageState extends State<AuthPage> {
     });
   }
 
-  // Strict Gmail validation similar to production apps
   bool isValidGmailStrict(String emailRaw) {
     final email = emailRaw.trim().toLowerCase();
-    // Must be gmail.com
     if (!email.endsWith('@gmail.com')) return false;
     final parts = email.split('@');
     if (parts.length != 2) return false;
     final user = parts.first;
-    // Length
     if (user.length < 3 || user.length > 30) return false;
-    // Start with letter
     if (!RegExp(r'^[a-z]').hasMatch(user)) return false;
-    // Allowed chars
     if (!RegExp(r'^[a-z0-9._]+$').hasMatch(user)) return false;
-    // No consecutive dots, no leading/trailing dot
     if (user.contains('..')) return false;
     if (user.startsWith('.') || user.endsWith('.')) return false;
-    // Must contain at least one letter, not purely digits
     if (!RegExp(r'[a-z]').hasMatch(user)) return false;
     if (RegExp(r'^[0-9]+$').hasMatch(user)) return false;
     return true;
@@ -175,10 +167,6 @@ class _AuthPageState extends State<AuthPage> {
     });
   }
 
-  // Google Sign‑In with account chooser
-  // Strategy:
-  // - Disconnect any cached session so chooser appears
-  // - Call signIn() to force interactive selection
   Future<void> _signInWithGoogle() async {
     setState(() {
       loading = true;
@@ -187,21 +175,17 @@ class _AuthPageState extends State<AuthPage> {
     try {
       final googleSignIn = GoogleSignIn(
         scopes: const ['email', 'profile'],
-        // Note: plugin shows the account picker if not already signed in.
       );
 
-      // Ensure chooser: sign out/disconnect cached account if any
       try {
         final current = await googleSignIn.signInSilently();
         if (current != null) {
           await googleSignIn.disconnect();
         }
         await googleSignIn.signOut();
-      } catch (_) {
-        // Ignore if not signed in previously
-      }
+      } catch (_) {}
 
-      final googleUser = await googleSignIn.signIn(); // interactive picker if multiple accounts
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         setState(() => loading = false);
         return;
@@ -274,123 +258,162 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // Responsive top spacing
+    final h = MediaQuery.of(context).size.height;
+    final topGap = (h * 0.06).clamp(16.0, 40.0); // above logo
+    final belowLogoGap = 10.0;                    // logo -> caption
+    final captionToTitleGap = 14.0;               // caption -> title
+
     return Scaffold(
       body: Stack(
         children: [
           const _WavyBlueBackground(),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // App logo circular
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: Colors.white,
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/app_logo.png',
-                          width: 64,
-                          height: 64,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      isLogin ? "Log In" : "Register",
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Form(
-                      key: formKey,
-                      child: Column(
-                        children: [
-                          TextFormField(
-                            controller: emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.email_outlined),
-                              labelText: "Email (Gmail only)",
-                            ),
-                            enabled: !loading,
-                            autovalidateMode: AutovalidateMode.onUserInteraction,
-                            validator: (v) {
-                              final value = v?.trim() ?? '';
-                              if (value.isEmpty) return 'Email is required';
-                              if (!isValidGmailStrict(value)) {
-                                return 'Use a valid Gmail (letters first, 3–30 chars, no only digits)';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: passwordController,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.lock_outline),
-                              labelText: "Password",
-                            ),
-                            enabled: !loading,
-                            autovalidateMode: AutovalidateMode.onUserInteraction,
-                            validator: (v) {
-                              final p = v ?? '';
-                              if (p.isEmpty) return 'Password is required';
-                              if (p.length < 6) return 'At least 6 characters';
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: loading ? null : _forgotPassword,
-                        child: const Text("Forgot password?"),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (error.isNotEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(error, style: const TextStyle(color: Colors.red)),
-                      ),
-                    ElevatedButton.icon(
-                      icon: isLogin ? const Icon(Icons.login) : const Icon(Icons.person_add_alt),
-                      label: Text(isLogin ? "Log In" : "Register"),
-                      onPressed: loading ? null : _submit,
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      icon: Image.asset('assets/google_logo.png', height: 24, width: 24),
-                      label: const Text("Continue with Google", style: TextStyle(color: Colors.black)),
-                      onPressed: loading ? null : _signInWithGoogle,
-                      style: ElevatedButton.styleFrom(
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: topGap),
+
+                      // Logo
+                      CircleAvatar(
+                        radius: 38,
                         backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        side: const BorderSide(color: Color(0xFFE0E3E7)),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/app_logo.png',
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: loading ? null : () => setState(() => isLogin = !isLogin),
-                      child: Text(
-                        isLogin ? "Don't have an account? Register" : "Already have an account? Log In",
-                        style: TextStyle(color: cs.primary),
+
+                      SizedBox(height: belowLogoGap),
+
+                      // Two-line centered caption exactly as requested
+                      Text(
+                        'By\nIndian Railways',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2, // slightly tighter line spacing
+                              letterSpacing: 0.2,
+                            ),
                       ),
-                    ),
-                  ],
+
+                      SizedBox(height: captionToTitleGap),
+
+                      // Title
+                      Text(
+                        isLogin ? "Log In" : "Register",
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Form
+                      Form(
+                        key: formKey,
+                        child: Column(
+                          children: [
+                            TextFormField(
+                              controller: emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.email_outlined),
+                                labelText: "Email (Gmail only)",
+                              ),
+                              enabled: !loading,
+                              autovalidateMode: AutovalidateMode.onUserInteraction,
+                              validator: (v) {
+                                final value = v?.trim() ?? '';
+                                if (value.isEmpty) return 'Email is required';
+                                if (!isValidGmailStrict(value)) {
+                                  return 'Use a valid Gmail (letters first, 3–30 chars, no only digits)';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: passwordController,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.lock_outline),
+                                labelText: "Password",
+                              ),
+                              enabled: !loading,
+                              autovalidateMode: AutovalidateMode.onUserInteraction,
+                              validator: (v) {
+                                final p = v ?? '';
+                                if (p.isEmpty) return 'Password is required';
+                                if (p.length < 6) return 'At least 6 characters';
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: loading ? null : _forgotPassword,
+                          child: const Text("Forgot password?"),
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      if (error.isNotEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(error, style: const TextStyle(color: Colors.red)),
+                        ),
+
+                      ElevatedButton.icon(
+                        icon: isLogin ? const Icon(Icons.login) : const Icon(Icons.person_add_alt),
+                        label: Text(isLogin ? "Log In" : "Register"),
+                        onPressed: loading ? null : _submit,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      ElevatedButton.icon(
+                        icon: Image.asset('assets/google_logo.png', height: 24, width: 24),
+                        label: const Text("Continue with Google", style: TextStyle(color: Colors.black)),
+                        onPressed: loading ? null : _signInWithGoogle,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          side: const BorderSide(color: Color(0xFFE0E3E7)),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextButton(
+                        onPressed: loading ? null : () => setState(() => isLogin = !isLogin),
+                        child: Text(
+                          isLogin ? "Don't have an account? Register" : "Already have an account? Log In",
+                          style: TextStyle(color: cs.primary),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -414,14 +437,13 @@ class _WavyBlueBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = Theme.of(context).colorScheme.primary.withOpacity(.10);   // light tint
-    final mid = const Color(0xFFE8F0FE); // pale blue
+    final top = Theme.of(context).colorScheme.primary.withOpacity(.10);
+    final mid = const Color(0xFFE8F0FE);
     final bottom = Colors.white;
 
     return SizedBox.expand(
       child: Stack(
         children: [
-          // base gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -432,7 +454,6 @@ class _WavyBlueBackground extends StatelessWidget {
               ),
             ),
           ),
-          // first wave
           Align(
             alignment: Alignment.topCenter,
             child: ClipPath(
@@ -449,7 +470,6 @@ class _WavyBlueBackground extends StatelessWidget {
               ),
             ),
           ),
-          // second subtle torn edge
           Align(
             alignment: Alignment.topCenter,
             child: ClipPath(

@@ -255,23 +255,27 @@ class ItemCard extends StatelessWidget {
                   const SizedBox(height: 7),
                   Row(
                     children: [
-                      Text(
-                        "Train/Station: ${item['stationOrTrain']}",
-                        style: const TextStyle(color: Colors.black87),
+                      Expanded(
+                        child: Text(
+                          "Train/Station: ${item['stationOrTrain']}",
+                          style: const TextStyle(color: Colors.black87),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       Text(
                         item['date'] is Timestamp
                             ? (item['date'] as Timestamp)
-                                .toDate()
-                                .toString()
-                                .split(' ')
-                                .first
+                                  .toDate()
+                                  .toString()
+                                  .split(' ')
+                                  .first
                             : (item['date'] ?? '-').toString().split('T').first,
                         style: const TextStyle(color: Colors.black54),
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,

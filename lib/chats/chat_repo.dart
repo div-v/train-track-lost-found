@@ -345,7 +345,7 @@ class ChatRepo {
     final me = uid;
     if (me.isEmpty) return;
     await _db.collection('conversations').doc(cid).update({
-      'deletedFor.$me': FieldValue.serverTimestamp(),
+      'deletedFor.$me': true,
     });
   }
 
