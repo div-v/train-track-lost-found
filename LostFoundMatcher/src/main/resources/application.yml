@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: "LostFoundMatcher"
+  main:
+    banner-mode: "off"
+
+app:
+  firebase:
+    project-id: "logindb-c1c82"
+    database-url: "https://logindb-c1c82-default-rtdb.firebaseio.com"
+    service-account-path: ""  # leave empty if using FIREBASE_SERVICE_ACCOUNT_JSON env var
