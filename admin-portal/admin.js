@@ -36,6 +36,15 @@ const setChipsActive = (containerId, value)=>{
   chips.forEach(c=>c.classList.toggle('active', c.dataset.value === value));
 };
 
+// Initialize date input (native date picker expected in HTML)
+(function initDatePicker(){
+  const dateInput = el('dateStr');
+  if (!dateInput) return;
+  // Prevent future dates (optional; remove if not desired)
+  const today = new Date().toISOString().slice(0,10);
+  dateInput.setAttribute('max', today);
+})();
+
 // Auth
 async function signInWithGoogle(){
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -61,16 +70,28 @@ function isStaff(){
   return currentClaims && (currentClaims.role === 'admin' || currentClaims.role === 'mod');
 }
 
+// Helpers
+function normalizeDateYYYYMMDD(raw){
+  // raw is "" or something parseable like "2025-08-25"
+  if(!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0,10);
+}
+
 // Filters
 function readFilters(){
   const type = document.querySelector('#typeChips .chip.active')?.dataset.value || 'all';
+  const rawDate = el('dateStr').value; // from <input type="date">
+  const dateStr = normalizeDateYYYYMMDD(rawDate);
+
   return {
     q: el('q').value.trim().toLowerCase(),
     type,
     category: el('category').value,
     status: el('status').value,
     station: el('station').value.trim().toLowerCase(),
-    dateStr: el('dateStr').value.trim(),
+    dateStr,
   };
 }
 function clearFilters(){
@@ -79,7 +100,7 @@ function clearFilters(){
   el('category').value = 'All';
   el('status').value = 'any';
   el('station').value = '';
-  el('dateStr').value = '';
+  el('dateStr').value = ''; // clears date picker
 }
 
 // Query
@@ -204,7 +225,7 @@ function itemCard(item){
           <div class="actions-right">
             <button class="btn" data-action="email" data-email="${safeEmail}">
             <img src="https://www.gstatic.com/images/branding/product/1x/gmail_48dp.png" 
-            alt="Gmail" width="18" height="18" class="icon-img">       
+            alt="Gmail" width="18" height="18" class="icon-img">        
               Contact Poster
             </button>
             ${item.photoUrl ? `<a class="btn" href="${item.photoUrl}" target="_blank">View Image</a>`:''}
