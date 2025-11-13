@@ -39,7 +39,7 @@
 
       <div class="spacer"></div>
 
-      <!-- Right-aligned auth controls -->
+      <!-- Right-aligned auth controls (unchanged) -->
       <div class="user-section" role="group" aria-label="User">
         <span id="userEmail" class="muted user-email"></span>
         <button id="btnSignIn" class="btn google-btn">
@@ -51,91 +51,92 @@
     </div>
   </header>
 
-  <div class="container">
-    <aside>
-      <h3>Filters</h3>
+  <!-- Protected content wrapper: hidden until login -->
+  <div id="protected" class="hidden">
+    <div class="container">
+      <aside>
+        <h3>Filters</h3>
 
-      <!-- Scrollable body of the panel -->
-      <div class="filters-body">
-        <div class="field">
-          <label>Search</label>
-          <input id="q" class="input" placeholder="title, description, station..." />
-          <div class="error" id="err-q"></div>
-        </div>
+        <div class="filters-body">
+          <div class="field">
+            <label>Search</label>
+            <input id="q" class="input" placeholder="title, description, station..." />
+            <div class="error" id="err-q"></div>
+          </div>
 
-        <div class="field">
-          <label>Type</label>
-          <div class="chips" id="typeChips">
-            <span class="chip active" data-value="all">All</span>
-            <span class="chip" data-value="lost">Lost</span>
-            <span class="chip" data-value="found">Found</span>
+          <div class="field">
+            <label>Type</label>
+            <div class="chips" id="typeChips">
+              <span class="chip active" data-value="all">All</span>
+              <span class="chip" data-value="lost">Lost</span>
+              <span class="chip" data-value="found">Found</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Category</label>
+            <select id="category" class="input">
+              <option value="All">All</option>
+              <option>Wallet</option>
+              <option>Electronics</option>
+              <option>Bag</option>
+              <option>Document</option>
+              <option>Clothing</option>
+              <option>Jewelry</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Status</label>
+            <select id="status" class="input">
+              <option value="any">Any</option>
+              <option value="active">Active</option>
+              <option value="flagged">Flagged</option>
+              <option value="claimed">Claimed</option>
+              <option value="deleted">Deleted</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Station / Train</label>
+            <input id="station" class="input" placeholder="e.g. NDLS / 12034" />
+            <div class="error" id="err-station"></div>
+          </div>
+
+          <div class="field">
+            <label>Date (YYYY-MM-DD)</label>
+            <input id="dateStr" class="input" type="date" />
+            <div class="error" id="err-date"></div>
           </div>
         </div>
 
-        <div class="field">
-          <label>Category</label>
-          <select id="category" class="input">
-            <option value="All">All</option>
-            <option>Wallet</option>
-            <option>Electronics</option>
-            <option>Bag</option>
-            <option>Document</option>
-            <option>Clothing</option>
-            <option>Jewelry</option>
-            <option>Other</option>
-          </select>
+        <div class="filters-actions">
+          <div class="row space-between">
+            <button id="btnApply" class="btn primary" disabled>Apply</button>
+            <button id="btnClear" class="btn">Clear</button>
+          </div>
         </div>
+      </aside>
 
-        <div class="field">
-          <label>Status</label>
-          <select id="status" class="input">
-            <option value="any">Any</option>
-            <option value="active">Active</option>
-            <option value="flagged">Flagged</option>
-            <option value="claimed">Claimed</option>
-            <option value="deleted">Deleted</option>
-          </select>
+      <main>
+        <div class="toolbar card">
+          <div class="row grow gap">
+            <span class="muted">Showing</span>
+            <select id="pageSize" class="input w-100">
+              <option>10</option><option>20</option><option>50</option>
+            </select>
+            <span class="muted">per page</span>
+          </div>
+          <div class="pagination">
+            <button id="prevPage" class="btn">Prev</button>
+            <span id="pageInfo" class="muted">Page 1</span>
+            <button id="nextPage" class="btn">Next</button>
+          </div>
         </div>
-
-        <div class="field">
-          <label>Station / Train</label>
-          <input id="station" class="input" placeholder="e.g. NDLS / 12034" />
-          <div class="error" id="err-station"></div>
-        </div>
-
-        <div class="field">
-          <label>Date (YYYY-MM-DD)</label>
-          <input id="dateStr" class="input" type="date" />
-          <div class="error" id="err-date"></div>
-        </div>
-      </div>
-
-      <!-- Sticky footer with actions -->
-      <div class="filters-actions">
-        <div class="row space-between">
-          <button id="btnApply" class="btn primary" disabled>Apply</button>
-          <button id="btnClear" class="btn">Clear</button>
-        </div>
-      </div>
-    </aside>
-
-    <main>
-      <div class="toolbar card">
-        <div class="row grow gap">
-          <span class="muted">Showing</span>
-          <select id="pageSize" class="input w-100">
-            <option>10</option><option>20</option><option>50</option>
-          </select>
-          <span class="muted">per page</span>
-        </div>
-        <div class="pagination">
-          <button id="prevPage" class="btn">Prev</button>
-          <span id="pageInfo" class="muted">Page 1</span>
-          <button id="nextPage" class="btn">Next</button>
-        </div>
-      </div>
-      <div id="grid" class="grid"></div>
-    </main>
+        <div id="grid" class="grid"></div>
+      </main>
+    </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>

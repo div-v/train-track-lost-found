@@ -47,7 +47,7 @@ header {
   margin: 0 auto;
 }
 
-/* Brand layout - 3 areas */
+/* Brand layout */
 .brand-left, .brand-center, .brand-right { display: flex; align-items: center; }
 .brand-left { width: auto; justify-content: flex-start; }
 
@@ -60,7 +60,7 @@ header {
 
 .brand-right { justify-content: flex-end; align-items: center; gap: 16px; }
 
-/* Logo section */
+/* Logos */
 .brand-logo {
   width: 90px;
   height: 90px;
@@ -132,6 +132,8 @@ header {
 .btn.danger { background: var(--danger); color: #fff; border: none; }
 .btn.ok { background: var(--ok); color: #fff; border: none; }
 .btn:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Hide utility */
 .hidden { display: none !important; }
 
 /* Google btn */
@@ -159,9 +161,9 @@ header {
   overflow: visible;
 }
 
-/* Filters panel: fixed visual height, scrolls internally, moves with page */
+/* Filters panel */
 aside{
-  position: relative;   /* not sticky; follows document flow */
+  position: relative;
   top: 0;
   background: var(--card);
   border: 1px solid var(--border);
@@ -169,22 +171,19 @@ aside{
   padding: 18px;
   box-shadow: var(--shadow);
 
-  display: flex;        /* column layout to support sticky footer row */
+  display: flex;
   flex-direction: column;
 
-  /* Set the fixed visual height you want */
-  max-height: 560px;    /* adjust to fit your design so Apply/Clear fit */
-  overflow: hidden;     /* we’ll scroll only the inner body */
+  max-height: 560px;
+  overflow: hidden;
 }
 
-/* Scrollable content area inside the panel */
 aside .filters-body{
   flex: 1 1 auto;
-  min-height: 0;        /* critical for flex children to allow shrinking */
-  overflow: auto;       /* internal scrollbar appears here */
+  min-height: 0;
+  overflow: auto;
 }
 
-/* Sticky action row at bottom of the panel */
 aside .filters-actions{
   position: sticky;
   bottom: 0;
@@ -195,6 +194,9 @@ aside .filters-actions{
   z-index: 1;
 }
 aside .filters-actions .row{ display: flex; gap: 10px; }
+aside .filters-actions .row {
+  pointer-events: auto;
+}
 
 aside h3 { margin: 0 0 12px; color: #17202a; font-size: 16px; }
 
@@ -271,13 +273,12 @@ main { display: flex; flex-direction: column; gap: 20px; }
 /* Actions */
 .actions {
   display: flex;
-  flex-wrap: wrap;           /* allows buttons to wrap to new line if needed */
+  flex-wrap: wrap;
   justify-content: center;
-  align-items: center;  /* centers buttons */
-  gap: 10px;                 /* spacing between buttons */
+  align-items: center;
+  gap: 10px;
   margin-top: 14px;
 }
-
 .actions .btn { min-width: 116px; padding: 8px 12px; font-weight: 700; }
 
 /* Responsive */
@@ -287,21 +288,19 @@ main { display: flex; flex-direction: column; gap: 20px; }
   .brand-left, .brand-right { display: none; }
   .appbar-toolbar { padding-left: 16px; padding-right: 16px; }
 
-  /* On small screens, let the filters expand naturally and avoid inner scroll */
   aside{
     max-height: none;
     overflow: visible;
-    display: block; /* no internal sticky footer on mobile */
+    display: block;
   }
   aside .filters-body{ overflow: visible; }
   aside .filters-actions{ position: static; border-top: none; padding-top: 0; margin-top: 12px; }
 }
 
-/* Fine-tuning (optional) */
+/* Fine-tuning */
 header { padding-bottom: 6px; }
 .appbar { padding: 16px 40px; }
 
-/* Scope user-section danger styling (if needed across header) */
 .appbar-toolbar .btn.danger { background: var(--danger); color: #fff; border: none; }
 .actions .btn {
   display: inline-flex;
@@ -310,17 +309,9 @@ header { padding-bottom: 6px; }
   min-width: 116px;
   padding: 8px 12px;
   font-weight: 700;
-  line-height: 1; /* ensures consistent height */
+  line-height: 1;
 }
-
-.actions a.btn, 
-.actions button.btn {
-  vertical-align: middle; /* aligns link and button types evenly */
-}
-
+.actions a.btn,
+.actions button.btn { vertical-align: middle; }
 .actions .btn img,
-.actions .btn svg {
-  vertical-align: middle;
-  height: 16px;
-  width: 16px;
-}
+.actions .btn svg { vertical-align: middle; height: 16px; width: 16px; }

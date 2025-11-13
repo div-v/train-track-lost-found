@@ -25,7 +25,9 @@ let page = 1;
 let pageSize = 10;
 let cursorStack = [];
 
-// DOM helpers
+// View/listener management
+const listenerRemovers = [];
+
 const el = (id)=>document.getElementById(id);
 const toast = (msg)=>{
   const t = el('toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -36,11 +38,153 @@ const setChipsActive = (containerId, value)=>{
   chips.forEach(c=>c.classList.toggle('active', c.dataset.value === value));
 };
 
-// Initialize date input (native date picker expected in HTML)
+function setView(allowed){
+  const protectedWrap = el('protected');
+  if (protectedWrap){
+    protectedWrap.classList.toggle('hidden', !allowed);
+  }
+  el('btnSignIn').classList.toggle('hidden', allowed);
+  el('btnSignOut').classList.toggle('hidden', !allowed);
+}
+
+/* ---------- Apply button validation helpers ---------- */
+
+function isValidDateYYYYMMDD(v){
+  if(!v) return false;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return false;
+  return v === d.toISOString().slice(0,10);
+}
+
+function getActiveType(){
+  return document.querySelector('#typeChips .chip.active')?.dataset.value || '';
+}
+
+// Required fields rule: adjust if needed
+function allFiltersFilled(){
+  return true;
+}
+
+function updateApplyEnabled(){
+  const btn = el('btnApply');
+  if(!btn) return;
+  btn.disabled = false;
+}
+/* ----------------------------------------------------- */
+
+function attachProtectedListeners(){
+  const offs = [];
+
+  // Ensure DOM is present; if not, retry on next frame
+  const applyBtn = el('btnApply');
+  if (!applyBtn) {
+    requestAnimationFrame(attachProtectedListeners);
+    return;
+  }
+
+  // Validate on change for relevant inputs
+  const ids = ['q','category','status','station','dateStr','pageSize'];
+  ids.forEach(id=>{
+    const node = el(id);
+    if(!node) return;
+    const evt = (node.tagName === 'SELECT' || node.type === 'date') ? 'change' : 'input';
+    const onCh = ()=>updateApplyEnabled();
+    node.addEventListener(evt, onCh);
+    offs.push(()=>node.removeEventListener(evt, onCh));
+  });
+
+  // Chips also affect validity
+  document.querySelectorAll('#typeChips .chip').forEach(ch=>{
+    const onChip = ()=>{
+      document.querySelectorAll('#typeChips .chip').forEach(c=>c.classList.remove('active'));
+      ch.classList.add('active');
+      updateApplyEnabled();
+    };
+    ch.addEventListener('click', onChip);
+    offs.push(()=>ch.removeEventListener('click', onChip));
+  });
+
+  // Apply click (defensive)
+  const onApply = async (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = el('btnApply');
+    if (btn.disabled) return;
+
+    
+    const filtersBefore = readFilters();
+    console.debug('Apply clicked; filters:', filtersBefore);
+
+    page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
+    try{
+      const {docs} = await fetchPage('next');
+      renderList(docs);
+    }catch(err){
+      console.error('Apply failed', err);
+      toast('Apply failed: ' + (err.message||''));
+    }
+  };
+  applyBtn.addEventListener('click', onApply);
+  offs.push(()=>applyBtn.removeEventListener('click', onApply));
+
+  // Clear resets and disables Apply
+  const onClear = async (e)=>{
+    e.preventDefault();
+    clearFilters();
+    setChipsActive('typeChips','all');
+    updateApplyEnabled(); // disabled because fields empty
+    page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
+    const {docs} = await fetchPage('next'); renderList(docs);
+  };
+  el('btnClear').addEventListener('click', onClear);
+  offs.push(()=>el('btnClear').removeEventListener('click', onClear));
+
+  // Pagination
+  const onNext = async ()=>{
+    const {docs} = await fetchPage('next');
+    if(docs.length===0){ toast('No more items'); page--; return; }
+    renderList(docs);
+  };
+  el('nextPage').addEventListener('click', onNext);
+  offs.push(()=>el('nextPage').removeEventListener('click', onNext));
+
+  const onPrev = async ()=>{
+    if(page<=1){ toast('Already at first page'); return; }
+    const {docs} = await fetchPage('prev'); renderList(docs);
+  };
+  el('prevPage').addEventListener('click', onPrev);
+  offs.push(()=>el('prevPage').removeEventListener('click', onPrev));
+
+  const onPageSize = async (e)=>{
+    pageSize = parseInt(e.target.value,10)||10;
+    page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
+    const {docs} = await fetchPage('next'); renderList(docs);
+  };
+  el('pageSize').addEventListener('change', onPageSize);
+  offs.push(()=>el('pageSize').removeEventListener('change', onPageSize));
+
+  // Initial button state
+  updateApplyEnabled();
+
+  listenerRemovers.push(...offs);
+}
+
+function detachProtectedListeners(){
+  while(listenerRemovers.length){
+    try{ listenerRemovers.pop()(); }catch(e){}
+  }
+}
+
+function resetProtectedState(){
+  page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
+  const grid = el('grid');
+  if (grid) grid.innerHTML = '';
+}
+
+// Initialize date input
 (function initDatePicker(){
   const dateInput = el('dateStr');
   if (!dateInput) return;
-  // Prevent future dates (optional; remove if not desired)
   const today = new Date().toISOString().slice(0,10);
   dateInput.setAttribute('max', today);
 })();
@@ -72,7 +216,6 @@ function isStaff(){
 
 // Helpers
 function normalizeDateYYYYMMDD(raw){
-  // raw is "" or something parseable like "2025-08-25"
   if(!raw) return '';
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return '';
@@ -82,7 +225,7 @@ function normalizeDateYYYYMMDD(raw){
 // Filters
 function readFilters(){
   const type = document.querySelector('#typeChips .chip.active')?.dataset.value || 'all';
-  const rawDate = el('dateStr').value; // from <input type="date">
+  const rawDate = el('dateStr').value;
   const dateStr = normalizeDateYYYYMMDD(rawDate);
 
   return {
@@ -100,7 +243,7 @@ function clearFilters(){
   el('category').value = 'All';
   el('status').value = 'any';
   el('station').value = '';
-  el('dateStr').value = ''; // clears date picker
+  el('dateStr').value = '';
 }
 
 // Query
@@ -110,6 +253,7 @@ function baseQuery(){
 
 async function fetchPage(direction='next'){
   const filters = readFilters();
+  console.log("🎯 Active filters:", filters);
   let q = baseQuery();
 
   if(filters.status !== 'any'){
@@ -224,8 +368,8 @@ function itemCard(item){
           </div>
           <div class="actions-right">
             <button class="btn" data-action="email" data-email="${safeEmail}">
-            <img src="https://www.gstatic.com/images/branding/product/1x/gmail_48dp.png" 
-            alt="Gmail" width="18" height="18" class="icon-img">        
+              <img src="https://www.gstatic.com/images/branding/product/1x/gmail_48dp.png" 
+                   alt="Gmail" width="18" height="18" class="icon-img">
               Contact Poster
             </button>
             ${item.photoUrl ? `<a class="btn" href="${item.photoUrl}" target="_blank">View Image</a>`:''}
@@ -239,7 +383,6 @@ function itemCard(item){
 function renderList(items){
   const grid = document.getElementById('grid');
   grid.innerHTML = items.map(itemCard).join('');
-  // Re-bind after every render
   grid.querySelectorAll('button[data-action]').forEach(btn=>{
     btn.addEventListener('click', onActionClick, { passive: true });
   });
@@ -294,16 +437,13 @@ async function flagItem(id){
   toast('Item flagged');
 }
 
-// Email open helper (same-tab navigation)
+// Email open helper
 function openEmailDraft(email){
   const addr = (email || '').trim();
   if(!addr){ toast('No email on file'); return; }
-
   const subject = encodeURIComponent('Regarding your Lost & Found post');
   const body = encodeURIComponent('Hello,\n\nThis is regarding your post on TrainTrack Lost & Found.\n\n— Staff');
   const href = `mailto:${encodeURIComponent(addr)}?subject=${subject}&body=${body}`;
-
-  // Most reliable across Chrome/Edge/Firefox
   window.location.assign(href);
 }
 
@@ -333,59 +473,55 @@ async function onActionClick(e){
   }
 }
 
-// Events
-document.getElementById('btnSignIn').addEventListener('click', async ()=>{
+// Only auth buttons are bound globally
+el('btnSignIn').addEventListener('click', async ()=>{
   try { await signInWithGoogle(); } catch(e) {}
 });
-document.getElementById('btnSignOut').addEventListener('click', async ()=>{
+el('btnSignOut').addEventListener('click', async ()=>{
   await auth.signOut();
 });
-document.getElementById('btnApply').addEventListener('click', async ()=>{
-  page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
-  const {docs} = await fetchPage('next'); renderList(docs);
-});
-document.getElementById('btnClear').addEventListener('click', async ()=>{
-  clearFilters(); page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
-  const {docs} = await fetchPage('next'); renderList(docs);
-});
-document.getElementById('nextPage').addEventListener('click', async ()=>{
-  const {docs} = await fetchPage('next');
-  if(docs.length===0){ toast('No more items'); page--; return; }
-  renderList(docs);
-});
-document.getElementById('prevPage').addEventListener('click', async ()=>{
-  if(page<=1){ toast('Already at first page'); return; }
-  const {docs} = await fetchPage('prev'); renderList(docs);
-});
-document.getElementById('pageSize').addEventListener('change', async (e)=>{
-  pageSize = parseInt(e.target.value,10)||10;
-  page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
-  const {docs} = await fetchPage('next'); renderList(docs);
-});
-document.querySelectorAll('#typeChips .chip').forEach(ch=>{
-  ch.addEventListener('click', ()=>{
-    document.querySelectorAll('#typeChips .chip').forEach(c=>c.classList.remove('active'));
-    ch.classList.add('active');
-  });
-});
 
+// Auth state guard
 auth.onAuthStateChanged(async (user)=>{
   currentUser = user;
   const signedIn = !!user;
-  el('btnSignIn').classList.toggle('hidden', signedIn);
-  el('btnSignOut').classList.toggle('hidden', !signedIn);
   el('userEmail').textContent = user ? user.email : '';
 
-  if(user){
-    currentClaims = await refreshClaims(user);
-    if(!isStaff()){
-      toast('Access restricted to staff');
-      document.getElementById('grid').innerHTML = '';
-      return;
-    }
-    page = 0; lastDoc = null; firstDoc = null; cursorStack = [];
-    const {docs} = await fetchPage('next'); renderList(docs);
+  if(!signedIn){
+    currentClaims = null;
+    setView(false);
+    detachProtectedListeners();
+    resetProtectedState();
+    return;
+  }
+
+  currentClaims = await refreshClaims(user);
+  if(!isStaff()){
+    toast('Access restricted to staff');
+    setView(false);
+    detachProtectedListeners();
+    resetProtectedState();
+    return;
+  }
+
+  setView(true);
+  detachProtectedListeners();   // avoid duplicates on re-login
+  // Wait a microtask so #protected subtree is in the DOM before attaching
+  await Promise.resolve();
+  attachProtectedListeners();
+  console.debug('btnApply present?', !!document.getElementById('btnApply'));
+  resetProtectedState();
+  const {docs} = await fetchPage('next');
+  renderList(docs);
+});
+document.addEventListener("DOMContentLoaded", () => {
+  const applyBtn = document.getElementById("btnApply");
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      console.log("✅ Apply button clicked!");
+      // put your filter logic here
+    });
   } else {
-    document.getElementById('grid').innerHTML = '';
+    console.log("❌ btnApply not found in DOM");
   }
 });
